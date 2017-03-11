@@ -1,0 +1,13 @@
+[package]
+name = "pwrabs"
+version = "0.1.0"
+authors = ["Brian Anderson <banderson@mozilla.com>"]
+build = "build.rs"
+
+[dependencies]
+unicode-segmentation = "1.1.0"
+fst = "0.1"
+
+[build-dependencies]
+unicode-segmentation = "1.1.0"
+fst = "0.1"
