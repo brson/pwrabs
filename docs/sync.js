@@ -1,4 +1,4 @@
-function pwraps(config) {
+var pwraps = function() {
     const utf8Encoder = new TextEncoder();
     
     function stringToUtf8(string) {
@@ -19,20 +19,26 @@ function pwraps(config) {
         };
     }
         
-    var config = stringBuf();
-    config.set(JSON.stringify(json));
-    // transfers the ownership of config
-    var verifier = Module._pwrabs_create(config.ptr);
+    var verifier = Module._pwrabs_create();
     
     var passbuf = stringBuf();
     return {
-        verify: function (pass) {
-            passbuf.set(pass);
-            var res = pwrabs_verify(passbuf.ptr);
-            if res != 0 {
-                var err = utf8ToString(res);
+        verify: function (set) {
+            passbuf.set(JSON.stringify(set));
+            var res = Module._pwrabs_verify(passbuf.ptr);
+            if (res != 0) {
+                var err = JSON.parse(utf8ToString(res));
                 throw err;
             }
         }
     };
+}();
+
+function test() {
+    var config = {
+        username: "user",
+        email: "user@example.com",
+        password: "foo bar"
+    };
+    pwraps.verify(config);
 }

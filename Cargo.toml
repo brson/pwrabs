@@ -10,7 +10,13 @@ fst = { version = "0.1", default_features = false }
 serde_derive = "*"
 serde_json = "*"
 serde = "*"
+futures = "*"
+wheel = { path="../wheel" }
 
 [build-dependencies]
 unicode-segmentation = "1.1.0"
 fst = { version = "0.1", default_features = false }
+
+[profile.release]
+opt-level = "z"
+#panic = "abort"
