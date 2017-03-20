@@ -11,7 +11,7 @@ serde_derive = "*"
 serde_json = "*"
 serde = "*"
 futures = "*"
-wheel = { path="../wheel" }
+wheel = { git="https://github.com/s3bk/wheel.git" }
 
 [build-dependencies]
 unicode-segmentation = "1.1.0"
