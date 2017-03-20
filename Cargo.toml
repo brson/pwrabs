@@ -2,15 +2,15 @@
 name = "pwrabs"
 version = "0.1.0"
 authors = ["Brian Anderson <banderson@mozilla.com>"]
-#build = "build.rs"
+build = "build.rs"
 
 [dependencies]
 unicode-segmentation = "1.1.0"
-
-[dependencies.fst]
-version = "*"
-default_features = false
+fst = { version = "0.1", default_features = false }
+serde_derive = "*"
+serde_json = "*"
+serde = "*"
 
 [build-dependencies]
 unicode-segmentation = "1.1.0"
-fst = "0.1"
+fst = { version = "0.1", default_features = false }
