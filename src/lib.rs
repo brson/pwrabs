@@ -1,3 +1,5 @@
+#[no_std]
+
 /// Password Rules are Bullshit
 ///
 /// https://blog.codinghorror.com/password-rules-are-bullshit/
@@ -7,17 +9,21 @@
 /// https://github.com/danielmiessler/SecLists/tree/master/Passwords
 ///
 
+#[macro_use]
+extern crate collections;
 extern crate fst;
 extern crate unicode_segmentation;
 
+use collections::{Vec, HashSet};
 use fst::{IntoStreamer, Streamer, Set, SetBuilder};
 use unicode_segmentation::UnicodeSegmentation;
-use std::path::{PathBuf};
 
 // NB: This number must also be changed in build.rs
 const DEFAULT_MIN_GLYPHS: u32 = 10;
 const DEFAULT_MAX_BYTES: u32 = 1024;
 const DEFAULT_UNIQUE_GLYPHS: u32 = 5;
+
+static OUT_BUF: Vec<u8> = Vec::new();
 
 pub fn pwrabs(pw: &str, username: &str, email: &str) -> Result<(), Error> {
     Config::new(username, email).validate(pw)
@@ -83,7 +89,6 @@ impl<'a> Config<'a> {
     }
 
     fn validate_min_and_unique_glyphs(&self, pw: &str) -> Result<(), Error> {
-        use std::collections::HashSet;
         // Allocate a hash set to track unique graphemes
         let mut glyphs = HashSet::with_capacity(self.unique_glyphs as usize);
         let mut total = 0;
@@ -125,9 +130,12 @@ impl<'a> Config<'a> {
     }
 
     fn validate_common_passwords(&self, pw: &str) -> Result<(), Error> {
-        let pwfst = include_bytes!(concat!(env!("OUT_DIR"), "/pws.fst"));
-        // FIXME: Don't allocate vectors
-        let pwset = Set::from_bytes(pwfst.to_vec()).expect("");
+        let pwfst = Fst::from_static_slice(
+            include_bytes!(concat!(env!("OUT_DIR"), "/pws.fst"))
+        ).expect("");
+        
+        let pwset = Set::from(pwfst).expect("");
+        
         if pwset.contains(pw) {
             Err(Error::Common(pw.to_string()))
         } else {
