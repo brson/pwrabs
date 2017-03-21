@@ -1,3 +1,8 @@
+#![no_std]
+#![feature(collections)]
+#![feature(alloc)]
+#![feature(box_patterns)]
+
 /// Password Rules are Bullshit
 ///
 /// https://blog.codinghorror.com/password-rules-are-bullshit/
@@ -7,36 +12,47 @@
 /// https://github.com/danielmiessler/SecLists/tree/master/Passwords
 ///
 
+extern crate collections;
+#[macro_use] extern crate serde_derive;
 extern crate fst;
 extern crate unicode_segmentation;
+extern crate serde_json;
+extern crate serde;
+extern crate alloc;
 
-use fst::{IntoStreamer, Streamer, Set, SetBuilder};
+use collections::{Vec, BTreeSet, String};
+use collections::string::ToString;
+use fst::Set;
+use fst::raw::Fst;
 use unicode_segmentation::UnicodeSegmentation;
-use std::path::{PathBuf};
 
 // NB: This number must also be changed in build.rs
-const DEFAULT_MIN_GLYPHS: u32 = 10;
+const DEFAULT_MIN_GLYPHS: u32 = 8;
 const DEFAULT_MAX_BYTES: u32 = 1024;
 const DEFAULT_UNIQUE_GLYPHS: u32 = 5;
 
-pub fn pwrabs(pw: &str, username: &str, email: &str) -> Result<(), Error> {
-    Config::new(username, email).validate(pw)
+pub struct Config {
+    /// Passwords must contain a minimum number of glyphs
+    min_glyphs:     u32,
+    /// Some of the glyphs must be unique
+    unique_glyphs:  u32,
+    /// Passwords must fit into a reasonable number of bytes
+    max_bytes:      u32,
+    
+    passwords:      Set
 }
 
-pub struct Config<'a> {
-    /// Passwords must contain a minimum number of glyphs
-    min_glyphs: u32,
-    /// Some of the glyphs must be unique
-    unique_glyphs: u32,
-    /// Passwords must fit into a reasonable number of bytes
-    max_bytes: u32,
+#[derive(Deserialize)]
+pub struct TestSet {
+    password:   String,
     /// Can't user username as password
-    username: &'a str,
+    username:   String,
     /// Nor email
-    email: &'a str,
+    email:      String,
 }
 
 #[derive(Debug, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Serialize)]
 pub enum Error {
     /// actual, min
     MinGlyphs(usize, u32),
@@ -50,45 +66,42 @@ pub enum Error {
     Common(String),
 }
 
-impl<'a> Config<'a> {
-    fn new(username: &'a str, email: &'a str) -> Config<'a> {
+impl Config {
+    pub fn new(fst: Fst) -> Config {
         Config {
-            min_glyphs: DEFAULT_MIN_GLYPHS,
-            unique_glyphs: DEFAULT_UNIQUE_GLYPHS,
-            max_bytes: DEFAULT_MAX_BYTES,
-            username: username,
-            email: email,
+            min_glyphs:     DEFAULT_MIN_GLYPHS,
+            unique_glyphs:  DEFAULT_UNIQUE_GLYPHS,
+            max_bytes:      DEFAULT_MAX_BYTES,
+            passwords:      Set::from(fst)
         }
     }
-
-    fn validate(&self, pw: &str) -> Result<(), Error> {
+    pub fn validate(&self, set: &TestSet) -> Result<(), Error> {
         // Do simple validation
-        self.validate_max_bytes(pw)?;
-        self.validate_min_and_unique_glyphs(pw)?;
-        self.validate_username(pw)?;
-        self.validate_email(pw)?;
+        self.validate_max_bytes(set)?;
+        self.validate_min_and_unique_glyphs(set)?;
+        self.validate_username(set)?;
+        self.validate_email(set)?;
 
         // Check the common passwords FST
-        self.validate_common_passwords(pw)?;
+        self.validate_common_passwords(set)?;
 
         Ok(())
     }
 
-    fn validate_max_bytes(&self, pw: &str) -> Result<(), Error> {
-        if pw.len() > self.max_bytes as usize {
-            Err(Error::MaxBytes(pw.len(), self.max_bytes))
+    fn validate_max_bytes(&self, set: &TestSet) -> Result<(), Error> {
+        if set.password.len() > self.max_bytes as usize {
+            Err(Error::MaxBytes(set.password.len(), self.max_bytes))
         } else {
             Ok(())
         }
     }
 
-    fn validate_min_and_unique_glyphs(&self, pw: &str) -> Result<(), Error> {
-        use std::collections::HashSet;
+    fn validate_min_and_unique_glyphs(&self, set: &TestSet) -> Result<(), Error> {
         // Allocate a hash set to track unique graphemes
-        let mut glyphs = HashSet::with_capacity(self.unique_glyphs as usize);
+        let mut glyphs = BTreeSet::new();
         let mut total = 0;
         // Parse the graphemes out of the password
-        let graphemes = pw.graphemes(true);
+        let graphemes = set.password.graphemes(true);
         // But only parse as many as we need to
         let graphemes = graphemes.take(self.min_glyphs as usize);
         for glyph in graphemes {
@@ -108,47 +121,54 @@ impl<'a> Config<'a> {
         }
     }
 
-    fn validate_username(&self, pw: &str) -> Result<(), Error> {
-        if pw == self.username {
-            Err(Error::Username(self.username.to_string()))
+    fn validate_username(&self, set: &TestSet) -> Result<(), Error> {
+        if set.password == set.username {
+            Err(Error::Username(set.username.to_string()))
         } else {
             Ok(())
         }
     }
 
-    fn validate_email(&self, pw: &str) -> Result<(), Error> {
-        if pw == self.email {
-            Err(Error::Email(self.email.to_string()))
+    fn validate_email(&self, set: &TestSet) -> Result<(), Error> {
+        if set.password == set.email {
+            Err(Error::Email(set.email.to_string()))
         } else {
             Ok(())
         }
     }
 
-    fn validate_common_passwords(&self, pw: &str) -> Result<(), Error> {
-        let pwfst = include_bytes!(concat!(env!("OUT_DIR"), "/pws.fst"));
-        // FIXME: Don't allocate vectors
-        let pwset = Set::from_bytes(pwfst.to_vec()).expect("");
-        if pwset.contains(pw) {
-            Err(Error::Common(pw.to_string()))
+    fn validate_common_passwords(&self, set: &TestSet) -> Result<(), Error> {
+        if self.passwords.contains(&set.password) {
+            Err(Error::Common(set.password.to_string()))
         } else {
             Ok(())
         }
     }
 }
 
-// The C interface
-mod cc {
-    #[no_mangle]
-    extern fn pwrabs(pw: *const u8,
-                     username: *const u8,
-                     email: *const u8) -> *const u8
-    {
-        panic!()
+pub struct Verifier {
+    config: Config,
+    buffer: Vec<u8>
+}
+impl Verifier {
+    pub fn new(fst: Fst) -> Verifier {
+        let config = Config::new(fst);
+        Verifier {
+            config: config,
+            buffer: Vec::new()
+        }
     }
-
-    #[no_mangle]
-    extern fn pwrabs_free(res: *const u8) {
-        panic!()
+    pub fn check(&mut self, set: &[u8]) -> Option<&[u8]> {
+        self.buffer.clear();
+        let set: TestSet = serde_json::from_slice(set).expect("failed to parse json");
+        match self.config.validate(&set) {
+            Ok(()) => None,
+            Err(e) => {
+                serde_json::to_writer(&mut self.buffer, &e).expect("failed to serialize");
+                self.buffer.push(0);
+                Some(&self.buffer)
+            }
+        }
     }
 }
 

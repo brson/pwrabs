@@ -2,16 +2,14 @@ extern crate fst;
 extern crate unicode_segmentation;
 
 use std::fs::File;
-use std::io::{BufReader, BufRead, Read, BufWriter, Write, Seek, SeekFrom};
+use std::io::{BufReader, BufRead, Write};
 use std::env;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::collections::BTreeSet;
 
-use fst::{IntoStreamer, Streamer, Set, SetBuilder};
+use fst::SetBuilder;
 use unicode_segmentation::UnicodeSegmentation;
 
-// NB: This number must also be changed in lib.rs
-const DEFAULT_MIN_GLYPHS: usize = 10;
 // The number of passwords to include in the FST,
 // There are 100,000 in the list of the top 1M.
 const PW_SET_SIZE: usize = 100_000;
@@ -29,7 +27,7 @@ fn main() {
         let glyphs = line.graphemes(true).count();
         // If it's a short password then it will be detected trivially.
         // Don't put it in the fst.
-        if glyphs < DEFAULT_MIN_GLYPHS { continue }
+        // if glyphs < DEFAULT_MIN_GLYPHS { continue }
         pws.insert(line);
 
         if pws.len() >= PW_SET_SIZE {
